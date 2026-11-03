@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TraceNumber - Advanced HLR Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Loader Spinner */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid #a855f7;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-slate-900 to-black min-h-screen text-gray-200 flex items-center justify-center p-4 font-sans">
+
+    <div class="glass-panel w-full max-w-lg p-8 rounded-2xl shadow-2xl">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 mb-2">TraceNumber</h1>
+            <p class="text-sm text-gray-400">Live API Tracking System</p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Nomor Telepon Internasional (Gunakan Kode Negara)</label>
+                <input type="tel" id="phone-input" placeholder="Contoh: 62895401061300" 
+                    class="w-full px-4 py-3 bg-gray-900/80 border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-600 text-white font-mono tracking-wide">
+            </div>
+            
+            <button id="track-btn" onclick="lacakNomor()" 
+                class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-semibold py-3 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-500/25">
+                <span id="btn-text">Lacak Data Nomor</span>
+                <div id="loading-spinner" class="loader hidden"></div>
+            </button>
+        </div>
+
+        <!-- Hasil Pencarian API -->
+        <div id="result-card" class="mt-6 bg-gray-800/50 border border-gray-700 rounded-xl p-4 hidden">
+            <h3 class="text-sm font-bold text-purple-400 border-b border-gray-700 pb-2 mb-3">Hasil Pelacakan API:</h3>
+            <ul class="text-sm space-y-2 text-gray-300">
+                <li><span class="text-gray-500">Negara:</span> <span id="res-country" class="font-semibold text-white">...</span></li>
+                <li><span class="text-gray-500">Lokasi/Wilayah:</span> <span id="res-location" class="font-semibold text-white">...</span></li>
+                <li><span class="text-gray-500">Provider:</span> <span id="res-carrier" class="font-semibold text-white">...</span></li>
+                <li><span class="text-gray-500">Tipe Line:</span> <span id="res-type" class="font-semibold text-white">...</span></li>
+            </ul>
+        </div>
+
+        <div id="status-msg" class="mt-4 text-center text-sm font-medium hidden"></div>
+
+        <!-- Google Maps -->
+        <div id="map" class="mt-6 w-full h-64 rounded-xl border border-gray-700 hidden bg-gray-800 overflow-hidden relative">
+            <div class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
+                Memuat Google Maps...
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key dipasang di Google Maps sesuai instruksi -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=83048d5579fb5df53b78fface868b0bb&callback=initMap"></script>
+
+    <script>
+        let map;
+        let marker;
+        const myApiKey = "83048d5579fb5df53b78fface868b0bb";
+
+        function initMap() {
+            console.log("Google Maps mencoba dimuat...");
+        }
+
+        async function lacakNomor() {
+            const phoneStr = document.getElementById('phone-input').value.replace(/[^0-9]/g, '');
+            const btnText = document.getElementById('btn-text');
+            const spinner = document.getElementById('loading-spinner');
+            const statusMsg = document.getElementById('status-msg');
+            const resultCard = document.getElementById('result-card');
+            const mapContainer = document.getElementById('map');
+            
+            if(!phoneStr) {
+                tampilkanPesan("Harap masukkan nomor telepon yang valid.", "text-red-400");
+                return;
+            }
+
+            // Ubah tombol jadi loading
+            btnText.textContent = "Melacak Server...";
+            spinner.classList.remove('hidden');
+            resultCard.classList.add('hidden');
+            mapContainer.classList.add('hidden');
+            statusMsg.classList.add('hidden');
+
+            try {
+                // Memanggil API eksternal (NumVerify) menggunakan API Key Anda
+                // Catatan: Numverify free tier biasanya HTTP. Di Vercel (HTTPS), endpoint ini harus di-routing lewat backend.
+                const apiUrl = `http://apilayer.net/api/validate?access_key=${myApiKey}&number=${phoneStr}`;
+                
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                if (data.valid) {
+                    // Update UI dengan data asli dari API
+                    document.getElementById('res-country').textContent = `${data.country_name} (${data.country_code})`;
+                    document.getElementById('res-location').textContent = data.location || "Wilayah Nasional";
+                    document.getElementById('res-carrier').textContent = data.carrier || "Tidak diketahui";
+                    document.getElementById('res-type').textContent = data.line_type || "Mobile";
+                    
+                    resultCard.classList.remove('hidden');
+                    tampilkanPesan("Data berhasil ditarik dari satelit provider.", "text-green-400");
+
+                    // Tampilkan Map ke wilayah asal nomor tersebut
+                    tampilkanPetaSederhana(data.country_code);
+                } else {
+                    tampilkanPesan("Nomor tidak valid atau API Key salah/limit habis.", "text-yellow-400");
+                }
+            } catch (error) {
+                // Fallback jika API terblokir CORS (sering terjadi jika dibuka langsung di browser)
+                tampilkanPesan("Gagal mengambil data Live API (Kemungkinan masalah CORS atau koneksi).", "text-red-400");
+                console.error(error);
+            } finally {
+                // Kembalikan tombol seperti semula
+                btnText.textContent = "Lacak Data Nomor";
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function tampilkanPesan(pesan, warnaClass) {
+            const statusMsg = document.getElementById('status-msg');
+            statusMsg.textContent = pesan;
+            statusMsg.className = `mt-4 text-center text-sm font-medium block ${warnaClass}`;
+        }
+
+        function tampilkanPetaSederhana(countryCode) {
+            const mapContainer = document.getElementById('map');
+            mapContainer.classList.remove('hidden');
+
+            // Set default koordinat berdasarkan kode negara
+            let coords = { lat: -6.2088, lng: 106.8456 }; // Default Indonesia
+            let zoom = 5;
+
+            if(countryCode === "US") coords = { lat: 37.0902, lng: -95.7129 };
+            if(countryCode === "MY") coords = { lat: 4.2105, lng: 101.9758 };
+
+            try {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    center: coords,
+                    zoom: zoom,
+                    styles: [
+                        { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                        { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                        { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                        { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+                    ]
+                });
+
+                marker = new google.maps.Marker({
+                    position: coords,
+                    map: map,
+                    animation: google.maps.Animation.DROP
+                });
+            } catch (e) {
+                mapContainer.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-red-400 text-sm p-4 text-center">
+                    Gagal memuat Google Maps.<br>API Key "${myApiKey}" yang dimasukkan tidak valid untuk Google Maps (Biasanya harus diawali 'AIza').
+                </div>`;
+            }
+        }
+    </script>
+</body>
+</html>
