@@ -1,179 +1,279 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TraceNumber - Advanced HLR Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .glass-panel {
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        /* Loader Spinner */
-        .loader {
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid #a855f7;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lokasi Keluarga</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --card:#ffffff; --text:#1f1f1f; --muted:#6b6b6b;
+    --accent:#2f6f4f; --accent-text:#fff; --border:#e5e3df;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17181a; --card:#212225; --text:#f0f0ee; --muted:#9a9a97; --accent:#4caf7d; --accent-text:#0b0b0b; --border:#33343a; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text);}
+  .wrap{max-width:720px; margin:0 auto; padding:20px 16px 40px;}
+  h1{font-size:20px; margin:0 0 4px;}
+  p.sub{color:var(--muted); margin:0 0 16px; font-size:14px;}
+  .row{display:flex; gap:8px; margin-bottom:12px;}
+  input{flex:1; padding:12px; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:14px;}
+  button{padding:12px 16px; border-radius:10px; border:none; background:var(--accent); color:var(--accent-text); font-weight:600; font-size:14px; cursor:pointer;}
+  button:disabled{opacity:.5;}
+  #map{width:100%; height:360px; border-radius:14px; margin:12px 0; border:1px solid var(--border);}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px;}
+  .member{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:14px;}
+  .member:last-child{border-bottom:none;}
+  .muted{color:var(--muted); font-size:12px;}
+  .status{font-size:13px; color:var(--muted); min-height:18px; margin-top:6px;}
+  .setup{background:#fff3cd; color:#664d03; border-radius:10px; padding:12px; font-size:13px; margin-bottom:16px; line-height:1.5;}
+</style>
 </head>
-<body class="bg-gradient-to-br from-gray-900 via-slate-900 to-black min-h-screen text-gray-200 flex items-center justify-center p-4 font-sans">
+<body>
+<div class="wrap">
+  <h1>📍 Lokasi Keluarga</h1>
+  <p class="sub">Setiap anggota membagikan lokasinya sendiri secara sukarela.</p>
 
-    <div class="glass-panel w-full max-w-lg p-8 rounded-2xl shadow-2xl">
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 mb-2">TraceNumber</h1>
-            <p class="text-sm text-gray-400">Live API Tracking System</p>
-        </div>
+  <div id="setupWarning" class="setup" style="display:none">
+    ⚠️ Firebase belum dikonfigurasi. Isi <code>firebaseConfig</code> di bagian bawah file HTML ini (lihat komentar di source code untuk langkah-langkahnya).
+  </div>
 
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Nomor Telepon Internasional (Gunakan Kode Negara)</label>
-                <input type="tel" id="phone-input" placeholder="Contoh: 62895401061300" 
-                    class="w-full px-4 py-3 bg-gray-900/80 border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-600 text-white font-mono tracking-wide">
-            </div>
-            
-            <button id="track-btn" onclick="lacakNomor()" 
-                class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-semibold py-3 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-500/25">
-                <span id="btn-text">Lacak Data Nomor</span>
-                <div id="loading-spinner" class="loader hidden"></div>
-            </button>
-        </div>
-
-        <!-- Hasil Pencarian API -->
-        <div id="result-card" class="mt-6 bg-gray-800/50 border border-gray-700 rounded-xl p-4 hidden">
-            <h3 class="text-sm font-bold text-purple-400 border-b border-gray-700 pb-2 mb-3">Hasil Pelacakan API:</h3>
-            <ul class="text-sm space-y-2 text-gray-300">
-                <li><span class="text-gray-500">Negara:</span> <span id="res-country" class="font-semibold text-white">...</span></li>
-                <li><span class="text-gray-500">Lokasi/Wilayah:</span> <span id="res-location" class="font-semibold text-white">...</span></li>
-                <li><span class="text-gray-500">Provider:</span> <span id="res-carrier" class="font-semibold text-white">...</span></li>
-                <li><span class="text-gray-500">Tipe Line:</span> <span id="res-type" class="font-semibold text-white">...</span></li>
-            </ul>
-        </div>
-
-        <div id="status-msg" class="mt-4 text-center text-sm font-medium hidden"></div>
-
-        <!-- Google Maps -->
-        <div id="map" class="mt-6 w-full h-64 rounded-xl border border-gray-700 hidden bg-gray-800 overflow-hidden relative">
-            <div class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
-                Memuat Google Maps...
-            </div>
-        </div>
+  <div id="loginBox" class="card" style="margin-bottom:12px;">
+    <div class="row">
+      <input id="phoneInput" placeholder="Nomor HP (contoh: +6281234567890)" />
+      <button id="sendOtpBtn">Kirim OTP</button>
     </div>
+    <div class="row" id="otpRow" style="display:none;">
+      <input id="otpInput" placeholder="Kode OTP dari SMS" />
+      <button id="verifyOtpBtn">Verifikasi</button>
+    </div>
+    <div id="recaptcha-container"></div>
+  </div>
 
-    <!-- API Key dipasang di Google Maps sesuai instruksi -->
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=83048d5579fb5df53b78fface868b0bb&callback=initMap"></script>
+  <div class="row" id="shareRow" style="display:none;">
+    <button id="shareBtn" style="flex:1;">Bagikan lokasi saya</button>
+    <button id="logoutBtn" style="flex:0 0 auto; background:transparent; color:var(--muted); border:1px solid var(--border);">Keluar</button>
+  </div>
+  <div class="status" id="status"></div>
 
-    <script>
-        let map;
-        let marker;
-        const myApiKey = "83048d5579fb5df53b78fface868b0bb";
+  <div id="map"></div>
 
-        function initMap() {
-            console.log("Google Maps mencoba dimuat...");
-        }
+  <div class="card">
+    <div id="list" class="muted">Memuat anggota keluarga…</div>
+  </div>
+</div>
 
-        async function lacakNomor() {
-            const phoneStr = document.getElementById('phone-input').value.replace(/[^0-9]/g, '');
-            const btnText = document.getElementById('btn-text');
-            const spinner = document.getElementById('loading-spinner');
-            const statusMsg = document.getElementById('status-msg');
-            const resultCard = document.getElementById('result-card');
-            const mapContainer = document.getElementById('map');
-            
-            if(!phoneStr) {
-                tampilkanPesan("Harap masukkan nomor telepon yang valid.", "text-red-400");
-                return;
-            }
+<script>
+/* =========================================================
+   1) KONFIGURASI FIREBASE — WAJIB DIISI
+   =========================================================
+   Langkah membuat Firebase (gratis, ~5 menit):
+   1. Buka https://console.firebase.google.com -> Buat project baru
+   2. Di sidebar: Build -> Realtime Database -> Create Database
+      -> pilih mode "Test mode" untuk mulai (nanti bisa diperketat)
+   3. Di sidebar: Project settings (ikon gerigi) -> scroll ke "Your apps"
+      -> klik ikon "</>" (Web) -> daftar aplikasi -> copy "firebaseConfig"
+   4. Paste firebaseConfig itu menggantikan placeholder di bawah ini
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyAdGEff51-ASVDvsCJWohKerGsrOf-IkbA",
+  authDomain: "lokasi-akurat.firebaseapp.com",
+  databaseURL: "https://lokasi-akurat-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "lokasi-akurat",
+  storageBucket: "lokasi-akurat.firebasestorage.app",
+  messagingSenderId: "790752792376",
+  appId: "1:790752792376:web:e5fcdef6448aa674c07bcd"
+};
 
-            // Ubah tombol jadi loading
-            btnText.textContent = "Melacak Server...";
-            spinner.classList.remove('hidden');
-            resultCard.classList.add('hidden');
-            mapContainer.classList.add('hidden');
-            statusMsg.classList.add('hidden');
+/* =========================================================
+   2) GOOGLE MAPS API KEY — sudah diisi
+   ========================================================= */
+const GOOGLE_MAPS_API_KEY = "AIzaSyCQup31nEXBYPRdCch07L6jaJtgChp7zA4";
 
-            try {
-                // Memanggil API eksternal (NumVerify) menggunakan API Key Anda
-                // Catatan: Numverify free tier biasanya HTTP. Di Vercel (HTTPS), endpoint ini harus di-routing lewat backend.
-                const apiUrl = `http://apilayer.net/api/validate?access_key=${myApiKey}&number=${phoneStr}`;
-                
-                const response = await fetch(apiUrl);
-                const data = await response.json();
+/* ========================================================= */
 
-                if (data.valid) {
-                    // Update UI dengan data asli dari API
-                    document.getElementById('res-country').textContent = `${data.country_name} (${data.country_code})`;
-                    document.getElementById('res-location').textContent = data.location || "Wilayah Nasional";
-                    document.getElementById('res-carrier').textContent = data.carrier || "Tidak diketahui";
-                    document.getElementById('res-type').textContent = data.line_type || "Mobile";
-                    
-                    resultCard.classList.remove('hidden');
-                    tampilkanPesan("Data berhasil ditarik dari satelit provider.", "text-green-400");
+let map, markers = {};
+let myUid = null, myPhone = null;
 
-                    // Tampilkan Map ke wilayah asal nomor tersebut
-                    tampilkanPetaSederhana(data.country_code);
-                } else {
-                    tampilkanPesan("Nomor tidak valid atau API Key salah/limit habis.", "text-yellow-400");
-                }
-            } catch (error) {
-                // Fallback jika API terblokir CORS (sering terjadi jika dibuka langsung di browser)
-                tampilkanPesan("Gagal mengambil data Live API (Kemungkinan masalah CORS atau koneksi).", "text-red-400");
-                console.error(error);
-            } finally {
-                // Kembalikan tombol seperti semula
-                btnText.textContent = "Lacak Data Nomor";
-                spinner.classList.add('hidden');
-            }
-        }
+const isFirebaseConfigured = !firebaseConfig.apiKey.startsWith("ISI_");
+if(!isFirebaseConfigured){
+  document.getElementById("setupWarning").style.display = "block";
+}
 
-        function tampilkanPesan(pesan, warnaClass) {
-            const statusMsg = document.getElementById('status-msg');
-            statusMsg.textContent = pesan;
-            statusMsg.className = `mt-4 text-center text-sm font-medium block ${warnaClass}`;
-        }
+// --- Load Google Maps script dynamically ---
+function loadGoogleMaps(){
+  return new Promise((resolve, reject)=>{
+    if(window.google && window.google.maps){ resolve(); return; }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&callback=__gmapsLoaded`;
+    window.__gmapsLoaded = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
 
-        function tampilkanPetaSederhana(countryCode) {
-            const mapContainer = document.getElementById('map');
-            mapContainer.classList.remove('hidden');
+function initMap(){
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: -2.5, lng: 118 }, // tengah Indonesia sebagai default
+    zoom: 5
+  });
+}
 
-            // Set default koordinat berdasarkan kode negara
-            let coords = { lat: -6.2088, lng: 106.8456 }; // Default Indonesia
-            let zoom = 5;
+function upsertMarker(id, data){
+  const pos = { lat: data.lat, lng: data.lng };
+  if(markers[id]){
+    markers[id].setPosition(pos);
+    markers[id].setTitle(data.phone || id);
+  } else {
+    markers[id] = new google.maps.Marker({
+      position: pos, map, title: data.phone || id
+    });
+  }
+}
 
-            if(countryCode === "US") coords = { lat: 37.0902, lng: -95.7129 };
-            if(countryCode === "MY") coords = { lat: 4.2105, lng: 101.9758 };
+function timeAgo(ts){
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s<60) return "baru saja";
+  if(s<3600) return Math.floor(s/60)+" menit lalu";
+  if(s<86400) return Math.floor(s/3600)+" jam lalu";
+  return Math.floor(s/86400)+" hari lalu";
+}
 
-            try {
-                map = new google.maps.Map(document.getElementById('map'), {
-                    center: coords,
-                    zoom: zoom,
-                    styles: [
-                        { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-                        { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-                        { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-                        { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-                    ]
-                });
+function renderList(allData){
+  const listEl = document.getElementById("list");
+  const entries = Object.entries(allData || {});
+  if(entries.length===0){
+    listEl.textContent = "Belum ada yang membagikan lokasi.";
+    return;
+  }
+  listEl.innerHTML = entries
+    .sort((a,b)=> (b[1].timestamp||0)-(a[1].timestamp||0))
+    .map(([id,d])=>{
+      const you = id===myUid ? " (Anda)" : "";
+      return `<div class="member"><span>${d.phone||id}${you}</span><span class="muted">${timeAgo(d.timestamp)}</span></div>`;
+    }).join("");
+}
 
-                marker = new google.maps.Marker({
-                    position: coords,
-                    map: map,
-                    animation: google.maps.Animation.DROP
-                });
-            } catch (e) {
-                mapContainer.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-red-400 text-sm p-4 text-center">
-                    Gagal memuat Google Maps.<br>API Key "${myApiKey}" yang dimasukkan tidak valid untuk Google Maps (Biasanya harus diawali 'AIza').
-                </div>`;
-            }
-        }
-    </script>
+// --- Firebase (via CDN, loaded lazily so Maps keeps working even without it) ---
+let db, auth, authModule, dbModule, confirmationResult, recaptchaVerifier;
+
+async function loadFirebase(){
+  if(!isFirebaseConfigured) return null;
+  const appModule = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+  authModule = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+  dbModule = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+
+  const app = appModule.initializeApp(firebaseConfig);
+  auth = authModule.getAuth(app);
+  db = dbModule.getDatabase(app);
+
+  authModule.onAuthStateChanged(auth, (user)=>{
+    if(user){
+      myUid = user.uid;
+      myPhone = user.phoneNumber;
+      document.getElementById("loginBox").style.display = "none";
+      document.getElementById("shareRow").style.display = "flex";
+      subscribeLocations();
+    } else {
+      myUid = null; myPhone = null;
+      document.getElementById("loginBox").style.display = "block";
+      document.getElementById("shareRow").style.display = "none";
+    }
+  });
+}
+
+function subscribeLocations(){
+  dbModule.onValue(dbModule.ref(db, "locations"), (snapshot)=>{
+    const data = snapshot.val() || {};
+    Object.entries(data).forEach(([id,d])=> upsertMarker(id, d));
+    renderList(data);
+  });
+}
+
+function setupRecaptcha(){
+  if(recaptchaVerifier) return recaptchaVerifier;
+  recaptchaVerifier = new authModule.RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+  return recaptchaVerifier;
+}
+
+async function sendOtp(){
+  const statusEl = document.getElementById("status");
+  const phone = document.getElementById("phoneInput").value.trim();
+  if(!phone.startsWith("+")){
+    statusEl.textContent = "Gunakan format internasional, contoh: +6281234567890";
+    return;
+  }
+  if(!isFirebaseConfigured){ statusEl.textContent = "Firebase belum dikonfigurasi."; return; }
+  document.getElementById("sendOtpBtn").disabled = true;
+  statusEl.textContent = "Mengirim kode OTP…";
+  try{
+    const verifier = setupRecaptcha();
+    confirmationResult = await authModule.signInWithPhoneNumber(auth, phone, verifier);
+    document.getElementById("otpRow").style.display = "flex";
+    statusEl.textContent = "Kode OTP dikirim via SMS. Masukkan kodenya.";
+  }catch(e){
+    statusEl.textContent = "Gagal kirim OTP: " + e.message;
+  }
+  document.getElementById("sendOtpBtn").disabled = false;
+}
+
+async function verifyOtp(){
+  const statusEl = document.getElementById("status");
+  const code = document.getElementById("otpInput").value.trim();
+  if(!code || !confirmationResult){ statusEl.textContent = "Masukkan kode OTP dulu."; return; }
+  document.getElementById("verifyOtpBtn").disabled = true;
+  statusEl.textContent = "Memverifikasi…";
+  try{
+    await confirmationResult.confirm(code);
+    statusEl.textContent = "Berhasil masuk ✓";
+  }catch(e){
+    statusEl.textContent = "Kode salah atau kadaluarsa: " + e.message;
+  }
+  document.getElementById("verifyOtpBtn").disabled = false;
+}
+
+async function shareLocation(){
+  const statusEl = document.getElementById("status");
+  if(!myUid){ statusEl.textContent = "Anda belum login."; return; }
+  if(!navigator.geolocation){ statusEl.textContent = "Browser tidak mendukung geolokasi."; return; }
+
+  document.getElementById("shareBtn").disabled = true;
+  statusEl.textContent = "Meminta izin lokasi…";
+
+  navigator.geolocation.getCurrentPosition(async (pos)=>{
+    const data = {
+      phone: myPhone,
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      timestamp: Date.now()
+    };
+    try{
+      await dbModule.set(dbModule.ref(db, "locations/"+myUid), data);
+      statusEl.textContent = "Lokasi dibagikan ✓";
+      upsertMarker(myUid, data);
+      map.setCenter({ lat: data.lat, lng: data.lng });
+      map.setZoom(13);
+    }catch(e){
+      statusEl.textContent = "Gagal menyimpan: " + e.message;
+    }
+    document.getElementById("shareBtn").disabled = false;
+  }, (err)=>{
+    statusEl.textContent = "Izin lokasi ditolak/gagal: " + err.message;
+    document.getElementById("shareBtn").disabled = false;
+  }, { enableHighAccuracy:true, timeout:10000 });
+}
+
+document.getElementById("sendOtpBtn").addEventListener("click", sendOtp);
+document.getElementById("verifyOtpBtn").addEventListener("click", verifyOtp);
+document.getElementById("shareBtn").addEventListener("click", shareLocation);
+document.getElementById("logoutBtn").addEventListener("click", ()=> authModule.signOut(auth));
+
+(async function start(){
+  await loadGoogleMaps();
+  initMap();
+  await loadFirebase();
+})();
+</script>
 </body>
 </html>
